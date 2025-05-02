@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Animal Animation Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            font-family: monospace;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Animal Animation Test</div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        
+        console.log("Three.js version:", THREE.REVISION);
+        
+        // Simple animal classes for testing
+        class Bird {
+            constructor(scene, x, y, z, color) {
+                this.position = new THREE.Vector3(x, y, z);
+                this.direction = new THREE.Vector3(
+                    Math.random() * 2 - 1,
+                    Math.random() * 0.2 - 0.1,
+                    Math.random() * 2 - 1
+                ).normalize();
+                this.speed = 0.03 + Math.random() * 0.02;
+                this.wingTime = Math.random() * Math.PI;
+                this.wingSpeed = 0.15 + Math.random() * 0.1;
+                
+                // Create bird mesh
+                const birdGroup = new THREE.Group();
+                
+                // Bird body
+                const bodyGeometry = new THREE.ConeGeometry(0.4, 1.2, 4);
+                bodyGeometry.rotateX(Math.PI / 2);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                birdGroup.add(body);
+                
+                // Wings
+                const wingGeometry = new THREE.PlaneGeometry(1.2, 0.4);
+                const wingMaterial = new THREE.MeshBasicMaterial({
+                    color,
+                    side: THREE.DoubleSide
+                });
+                
+                const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+                leftWing.position.set(-0.6, 0, -0.2);
+                leftWing.rotation.z = -Math.PI / 4;
+                birdGroup.add(leftWing);
+                
+                const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+                rightWing.position.set(0.6, 0, -0.2);
+                rightWing.rotation.z = Math.PI / 4;
+                birdGroup.add(rightWing);
+                
+                this.wings = [leftWing, rightWing];
+                this.mesh = birdGroup;
+                
+                // Position and rotation
+                birdGroup.position.copy(this.position);
+                birdGroup.rotation.y = Math.random() * Math.PI * 2;
+                
+                scene.add(birdGroup);
+            }
+            
+            update(deltaTime) {
+                // Move the bird
+                const movement = this.direction.clone().multiplyScalar(this.speed);
+                this.position.add(movement);
+                this.mesh.position.copy(this.position);
+                
+                // Face direction of movement
+                this.mesh.lookAt(this.position.clone().add(this.direction));
+                
+                // Animate wings
+                this.wingTime += this.wingSpeed;
+                const wingFlapAmount = Math.sin(this.wingTime) * 0.5 + 0.2;
+                
+                this.wings[0].rotation.z = -Math.PI / 4 - wingFlapAmount;
+                this.wings[1].rotation.z = Math.PI / 4 + wingFlapAmount;
+                
+                // Wrap around boundaries
+                const limit = 50;
+                if (this.position.x < -limit) this.position.x = limit;
+                if (this.position.x > limit) this.position.x = -limit;
+                if (this.position.y < 2) this.position.y = 2;
+                if (this.position.y > 20) this.position.y = 20;
+                if (this.position.z < -limit) this.position.z = limit;
+                if (this.position.z > limit) this.position.z = -limit;
+            }
+        }
+        
+        class Sheep {
+            constructor(scene, x, y, z) {
+                this.position = new THREE.Vector3(x, y, z);
+                
+                // Create sheep mesh
+                const sheepGroup = new THREE.Group();
+                
+                // Sheep body
+                const bodyGeometry = new THREE.BoxGeometry(2, 1, 1);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                sheepGroup.add(body);
+                
+                // Sheep head
+                const headGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+                const headMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const head = new THREE.Mesh(headGeometry, headMaterial);
+                head.position.x = 1.0;
+                sheepGroup.add(head);
+                
+                // Legs
+                const legPositions = [
+                    [-0.7, -0.5, 0.4],  // back right
+                    [-0.7, -0.5, -0.4], // back left
+                    [0.7, -0.5, 0.4],   // front right
+                    [0.7, -0.5, -0.4]   // front left
+                ];
+                
+                legPositions.forEach(pos => {
+                    const legGeometry = new THREE.BoxGeometry(0.2, 1.0, 0.2);
+                    const legMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                    const leg = new THREE.Mesh(legGeometry, legMaterial);
+                    leg.position.set(pos[0], pos[1], pos[2]);
+                    sheepGroup.add(leg);
+                });
+                
+                this.mesh = sheepGroup;
+                this.baseHeight = 1.0;
+                
+                // Position
+                sheepGroup.position.copy(this.position);
+                sheepGroup.position.y += this.baseHeight;
+                
+                scene.add(sheepGroup);
+            }
+            
+            update(deltaTime) {
+                // Animate bobbing up and down
+                const time = Date.now() * 0.001;
+                const bobHeight = 0.3;
+                this.mesh.position.y = this.position.y + this.baseHeight + Math.sin(time) * bobHeight;
+                
+                // Rotate slowly
+                this.mesh.rotation.y += 0.01;
+            }
+        }
+        
+        // Set up scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 30);
+        
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas') });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+        
+        // Add ground
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x7CFC00 }); // Lawn green
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+        
+        // Add orbit controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.update();
+        
+        // Add birds and sheep
+        const birds = [];
+        const sheep = [];
+        
+        // Create birds
+        for (let i = 0; i < 5; i++) {
+            const x = Math.random() * 40 - 20;
+            const y = Math.random() * 10 + 10;
+            const z = Math.random() * 40 - 20;
+            const color = Math.random() * 0xffffff;
+            birds.push(new Bird(scene, x, y, z, color));
+        }
+        
+        // Create sheep
+        for (let i = 0; i < 3; i++) {
+            const x = Math.random() * 40 - 20;
+            const z = Math.random() * 40 - 20;
+            sheep.push(new Sheep(scene, x, 0, z));
+        }
+        
+        // Update info text
+        const info = document.getElementById('info');
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = 0.016; // Approx 60fps
+            
+            // Update animals
+            birds.forEach(bird => bird.update(deltaTime));
+            sheep.forEach(sheep => sheep.update(deltaTime));
+            
+            // Update info text
+            info.textContent = `Animals Test: ${birds.length} birds, ${sheep.length} sheep`;
+            
+            // Render
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html> 

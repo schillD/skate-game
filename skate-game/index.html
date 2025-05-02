@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Skateboarding Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #instructions {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+        #instructions.minimized #instructions-content {
+            display: none;
+        }
+        #instructions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 5px 5px 0 0;
+            cursor: move;
+        }
+        #instructions.minimized #instructions-header {
+            border-radius: 5px;
+        }
+        #instructions-content {
+            padding: 10px;
+        }
+        #toggle-instructions {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            border-radius: 3px;
+        }
+        #toggle-instructions:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        #fpvToggle {
+            position: fixed;
+            top: 160px;
+            right: 10px;
+            z-index: 1000;
+            padding: 8px 12px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid #666;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        /* Media query for smaller screens */
+        @media (max-width: 768px) {
+            #fpvToggle {
+                top: 150px;
+                right: 10px;
+            }
+            
+            /* Ensure instructions panel doesn't get too wide on mobile */
+            #instructions {
+                max-width: 80vw;
+            }
+            
+            /* Make the instructions header more touch-friendly */
+            #instructions-header {
+                padding: 12px;
+            }
+            
+            #toggle-instructions {
+                font-size: 24px;
+                width: 36px;
+                height: 36px;
+                padding: 4px;
+            }
+        }
+        
+        /* Additional styles for touch devices */
+        .touch-device #toggle-instructions {
+            min-width: 44px;
+            min-height: 44px;
+            font-size: 28px;
+        }
+        
+        .touch-device #instructions-header {
+            padding: 12px 16px;
+        }
+        
+        .touch-device #instructions-header .touch-header {
+            font-size: 18px;
+        }
+        
+        /* Add tap highlight color for mobile */
+        .touch-device #toggle-instructions:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <div id="instructions-header">
+            <span>Game Instructions</span>
+            <button id="toggle-instructions">−</button>
+        </div>
+        <div id="instructions-content">
+            WASD or Arrow Keys to move<br>
+            Space to jump (hold longer before releasing for higher jumps)<br>
+            Mouse to look around<br>
+            Music controls in bottom right corner<br>
+            Ride over blue circles for speed boosts!<br>
+            Ride over orange pads for super jumps!<br>
+            Watch out for police officers - they'll chase you if they spot you!<br>
+            <span style="color: red; font-weight: bold;">You have 3 lives ❤️❤️❤️ - Lose one each time you get caught</span><br>
+            <span style="color: gold; font-weight: bold;">Collect all coins to win the game!</span><br>
+            <span style="color: lightblue;" id="mobile-instructions">On mobile: Use on-screen controls to move and jump</span>
+        </div>
+    </div>
+    <button id="fpvToggle">First Person View</button>
+    <canvas id="gameCanvas"></canvas>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const instructions = document.getElementById('instructions');
+            const toggleBtn = document.getElementById('toggle-instructions');
+            const instructionsHeader = document.getElementById('instructions-header');
+            
+            // Check if there's a saved state
+            const isMinimized = localStorage.getItem('instructionsMinimized') === 'true';
+            if (isMinimized) {
+                instructions.classList.add('minimized');
+                toggleBtn.textContent = '+';
+            }
+            
+            // Detect if device is touch-based
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (isTouchDevice) {
+                // Add class for touch-specific styling
+                document.body.classList.add('touch-device');
+                
+                // Make the toggle button bigger on touch devices
+                toggleBtn.classList.add('touch-button');
+                instructionsHeader.classList.add('touch-header');
+            }
+            
+            // Make the toggle button very responsive to clicks/touches
+            toggleBtn.addEventListener('click', handleToggleClick);
+            toggleBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault(); // Prevent double events on touch devices
+                handleToggleClick();
+            });
+            
+            function handleToggleClick() {
+                instructions.classList.toggle('minimized');
+                const minimized = instructions.classList.contains('minimized');
+                toggleBtn.textContent = minimized ? '+' : '−';
+                
+                // Save the state
+                localStorage.setItem('instructionsMinimized', minimized);
+                
+                // Apply visual feedback for touch devices
+                if (isTouchDevice) {
+                    toggleBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
+                    setTimeout(() => {
+                        toggleBtn.style.backgroundColor = '';
+                    }, 200);
+                }
+            }
+            
+            // Make instructions draggable with both mouse and touch events
+            let isDragging = false;
+            let offsetX, offsetY;
+            let lastTapTime = 0;
+            
+            // Mouse events
+            instructionsHeader.addEventListener('mousedown', function(e) {
+                if (e.target !== toggleBtn) {
+                    startDragging(e.clientX, e.clientY);
+                }
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                moveElement(e.clientX, e.clientY);
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+            });
+            
+            // Touch events with improved handling
+            instructionsHeader.addEventListener('touchstart', function(e) {
+                // Don't handle touch events for the toggle button
+                if (e.target === toggleBtn) return;
+                
+                if (e.touches.length === 1) {
+                    e.preventDefault(); // Prevent scrolling when dragging
+                    
+                    // Check for double tap to minimize/maximize
+                    const now = new Date().getTime();
+                    const timeSince = now - lastTapTime;
+                    
+                    if (timeSince < 300 && timeSince > 0) {
+                        // Double tap detected
+                        handleToggleClick();
+                        isDragging = false;
+                        return;
+                    }
+                    
+                    lastTapTime = now;
+                    const touch = e.touches[0];
+                    startDragging(touch.clientX, touch.clientY);
+                    
+                    // Visual feedback
+                    instructionsHeader.style.backgroundColor = 'rgba(60, 60, 60, 0.9)';
+                }
+            }, { passive: false });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (!isDragging || e.touches.length !== 1) return;
+                
+                // Prevent default to stop page scrolling while dragging
+                e.preventDefault();
+                const touch = e.touches[0];
+                moveElement(touch.clientX, touch.clientY);
+            }, { passive: false });
+            
+            function touchEndHandler() {
+                if (isDragging) {
+                    // Reset visual feedback
+                    instructionsHeader.style.backgroundColor = '';
+                }
+                isDragging = false;
+            }
+            
+            document.addEventListener('touchend', touchEndHandler);
+            document.addEventListener('touchcancel', touchEndHandler);
+            
+            // Helper functions
+            function startDragging(clientX, clientY) {
+                isDragging = true;
+                offsetX = clientX - instructions.getBoundingClientRect().left;
+                offsetY = clientY - instructions.getBoundingClientRect().top;
+            }
+            
+            function moveElement(clientX, clientY) {
+                // Calculate new position
+                let left = clientX - offsetX;
+                let top = clientY - offsetY;
+                
+                // Keep within window bounds
+                left = Math.max(0, Math.min(window.innerWidth - instructions.offsetWidth, left));
+                top = Math.max(0, Math.min(window.innerHeight - instructions.offsetHeight, top));
+                
+                instructions.style.left = left + 'px';
+                instructions.style.top = top + 'px';
+            }
+            
+            // Set initial position based on screen size
+            function setInitialPosition() {
+                if (!instructions.style.top && !instructions.style.left) {
+                    // Only set if not manually positioned already
+                    instructions.style.top = '10px';
+                    instructions.style.left = '10px';
+                }
+            }
+            
+            setInitialPosition();
+            window.addEventListener('resize', setInitialPosition);
+        });
+    </script>
+</body>
+</html> 
